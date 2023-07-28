@@ -21,27 +21,12 @@ import sys
 import time
 import datetime
 import os
-from HiveTask import HiveTask
 
 sys.path.append(os.getenv('HIVE_TASK'))
 homePath = os.getenv('HOME')
 
-# 输入参数：python3 ***.py start_date end_date
-if (len(sys.argv) > 4 or len(sys.argv) <= 1):
-    sys.exit("ParameterNumberException.")
-std = sys.argv[1]
-end = sys.argv[2]
-dp = sys.argv[3]
-print("std: %s, end:%s, end:%s" % (std, end, dp))
-# 参数校验，如果参数格式解析异常则抛出异常
-try:
-    time.strptime(std, "%Y-%m-%d")
-    time.strptime(end, "%Y-%m-%d")
-except Exception as e:
-    sys.exit("ParameterParseException.")
-ftime_std = datetime.datetime.strptime(std, '%Y-%m-%d').strftime('%Y%m%d')
-ftime_end = datetime.datetime.strptime(end, '%Y-%m-%d').strftime('%Y%m%d')
-ftime = datetime.datetime.strptime(ftime_std, '%Y%m%d').strftime('%Y%m%d')  # 遗留处理
+ftime_std='20230722'
+ftime_end='20230722'
 
 h_udf = """
     --- import udf
@@ -576,8 +561,10 @@ def get_app_base_model_click_placementid_monitor_data_sql(dt):
     return """
     INSERT OVERWRITE TABLE app.app_base_model_click_placementid_monitor_data PARTITION(dt = '""" + dt + """') 
     SELECT
-        ad_traffic_type,
-        combine_play_type,
+        COALESCE(a.ad_traffic_type,b.ad_traffic_type,c.ad_traffic_type,d.ad_traffic_type,e.ad_traffic_type,f.ad_traffic_type,g.ad_traffic_type,h.ad_traffic_type) 
+        as ad_traffic_type,
+        COALESCE(a.combine_play_type,b.combine_play_type,c.combine_play_type,d.combine_play_type,e.combine_play_type,f.combine_play_type,g.combine_play_type,h.combine_play_type)  
+        as combine_play_type,
         
         max(all_clicks) as all_clicks, --- '总点击量',
         max(placementid_isnull_clicks) as placementid_isnull_clicks, --- '广告位为空点击量',
@@ -627,19 +614,11 @@ def get_app_base_model_click_placementid_monitor_data_sql(dt):
         combine_play_type
     """
 
+
+
 while (int(ftime_std) <= int(ftime_end)):
-    ht = HiveTask()
     tab_name = 'app.app_base_model_click_placementid_monitor_data'
     dt = datetime.datetime.strptime(ftime_std, '%Y%m%d').strftime('%Y-%m-%d')
     exe_sql_app_base_model_click_placementid_monitor_data = h_udf + h_env + get_app_base_model_click_placementid_monitor_data_sql(dt)
     print("print sql : " + exe_sql_app_base_model_click_placementid_monitor_data)
-    ht.exec_sql(
-        schema_name='app',
-        table_name=tab_name,
-        sql=exe_sql_app_base_model_click_placementid_monitor_data,
-        exec_engine='spark',
-        spark_resource_level='high',
-        retry_with_hive=False,
-        spark_args=['--conf spark.sql.hive.mergeFiles=true']
-    )
     ftime_std = (datetime.datetime.strptime(ftime_std, '%Y%m%d') + datetime.timedelta(days=1)).strftime('%Y%m%d')

@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/ad_sql_all.iml" filepath="$PROJECT_DIR$/ad_sql_all.iml" />
       <module fileurl="file://$PROJECT_DIR$/model_monitor/model_monitor.iml" filepath="$PROJECT_DIR$/model_monitor/model_monitor.iml" />
+      <module fileurl="file://$PROJECT_DIR$/visitpath/visitpath.iml" filepath="$PROJECT_DIR$/visitpath/visitpath.iml" />
     </modules>
   </component>
 </project>
