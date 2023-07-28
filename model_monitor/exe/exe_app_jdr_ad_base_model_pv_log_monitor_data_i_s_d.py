@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # ===============================================================================
 #
-#         FILE: exe_app_base_model_pv_log_monitor_data.py
+#         FILE: exe_app_jdr_ad_base_model_pv_log_monitor_data_i_s_d.py
 #
-#        USAGE: ./exe_app_base_model_pv_log_monitor_data.py
+#        USAGE: ./exe_app_jdr_ad_base_model_pv_log_monitor_data_i_s_d.py
 #
 #  DESCRIPTION: 渠道归因相关监控
 
@@ -14,8 +14,9 @@
 #       AUTHOR: puchangchun1@jd.com
 #      COMPANY: jd.com
 #      VERSION: 1.0
-#      CREATED: 2023-07-24
-#    TGT_TABLE: app.app_base_model_pv_log_monitor_data
+#      CREATED: 2023-07-27
+#    ORC_TABLE: ad.ad_base_model_pv_log_with_click
+#    TGT_TABLE: app.app_jdr_ad_base_model_pv_log_monitor_data_i_s_d
 # ===============================================================================
 import sys
 import time
@@ -72,19 +73,17 @@ h_env = """
 """
 
 
-
-def get_app_base_model_pv_log_monitor_data_sql(dt):
-    # 2.2.2 四级渠道统计浏览UV与计费点击关联统计浏览PV diff监控
-    # 监控表：ad_base_model_pv_log_with_click
-    # 监控指标：浏览关联比例（浏览关联比例=计费点击关联浏览量/四级渠道统计浏览量）
-    pv_join_click_sql = """
+def get_ad_base_model_pv_log_monitor_data_sql(dt):
+    result_sql = """
+    INSERT OVERWRITE TABLE app.app_jdr_ad_base_model_pv_log_monitor_data_i_s_d PARTITION(dt = '""" + dt + """') 
     SELECT
         pv_chan_first_cate_cd,
         pv_chan_second_cate_cd,        
         pv_chan_third_cate_cd,        
         pv_chan_fourth_cate_cd,
         count(1) as pv, 
-        sum(if(is_join_clikc_flag in ('1'), 1, 0)) as join_click_pv
+        sum(if(is_join_clikc_flag in ('1'), 1, 0)) as join_click_pv, --- 计费点击关联浏览量
+        sum(if(clk_utm_term LIKE '%{CLICK_ID}%', 1, 0)) as jdv_click_id_macro_replace_faild --- 宏替换失败浏览量
     FROM
         ad.ad_base_model_pv_log_with_click
     WHERE 
@@ -95,59 +94,15 @@ def get_app_base_model_pv_log_monitor_data_sql(dt):
         pv_chan_third_cate_cd,        
         pv_chan_fourth_cate_cd     
     """
+    return result_sql
 
-    # 2.2.3 浏览表中jdv_utm_term中是否有宏替换失败的情况
-    # 分四级渠道，监控jdv_utm_term宏替换失败比例
-    # 监控表：ad_base_model_pv_log_with_click
-    # 监控指标：监控jdv_utm_term宏替换失败的浏览量、jdv_utm_term宏替换失败比例（比例=jdv_utm_term宏替换失败的浏览量/总浏览）
-    dv_utm_term_replace_failed_sql = """
-    SELECT
-        pv_chan_first_cate_cd,
-        pv_chan_second_cate_cd,        
-        pv_chan_third_cate_cd,        
-        pv_chan_fourth_cate_cd,
-        sum(if(is_join_clikc_flag in ('1'), 1, 0)) as jdv_utm_term_replace_faild
-    FROM
-        ad.ad_base_model_pv_log_with_click
-    WHERE 
-        dt = '""" + dt + """' 
-    GROUP BY
-        pv_chan_first_cate_cd,
-        pv_chan_second_cate_cd,        
-        pv_chan_third_cate_cd,        
-        pv_chan_fourth_cate_cd     
-    """
 
-    return """
-    INSERT OVERWRITE TABLE app.app_base_model_pv_log_monitor_data PARTITION(dt = '""" + dt + """') 
-    SELECT
-    pv_chan_first_cate_cd,
-    pv_chan_second_cate_cd,
-    pv_chan_third_cate_cd,       
-    pv_chan_fourth_cate_cd,
-    
-    max(pv),
-    max(join_click_pv), 
-    
-    max(jdv_utm_term_replace_faild)
-    
-    FROM 
-        """ + pv_join_click_sql + """
-        UNION ALL 
-        """ + dv_utm_term_replace_failed_sql + """
-    GROUP BY
-        pv_chan_first_cate_cd,
-        pv_chan_second_cate_cd,        
-        pv_chan_third_cate_cd,        
-        pv_chan_fourth_cate_cd  
-    """
-
+tab_name = 'app.app_jdr_ad_base_model_pv_log_monitor_data_i_s_d'
 
 while (int(ftime_std) <= int(ftime_end)):
     ht = HiveTask()
-    tab_name = 'app.app_base_model_pv_log_monitor_data'
     dt = datetime.datetime.strptime(ftime_std, '%Y%m%d').strftime('%Y-%m-%d')
-    exe_sql_app_base_model_pv_log_monitor_data = h_udf + h_env + get_app_base_model_pv_log_monitor_data_sql(dt)
+    exe_sql_app_base_model_pv_log_monitor_data = h_udf + h_env + get_ad_base_model_pv_log_monitor_data_sql(dt)
     print("print sql : " + exe_sql_app_base_model_pv_log_monitor_data)
     ht.exec_sql(
         schema_name='app',
@@ -159,4 +114,3 @@ while (int(ftime_std) <= int(ftime_end)):
         spark_args=['--conf spark.sql.hive.mergeFiles=true']
     )
     ftime_std = (datetime.datetime.strptime(ftime_std, '%Y%m%d') + datetime.timedelta(days=1)).strftime('%Y%m%d')
-
